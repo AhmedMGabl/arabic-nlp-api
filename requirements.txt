@@ -1,0 +1,24 @@
+# Arabic NLP API — Python dependencies
+# Pinned for reproducible Railway builds.
+# All packages are lightweight and CPU-only — no GPU required.
+
+# --- Web framework ---
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+gunicorn==23.0.0
+
+# --- Pydantic / settings ---
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# --- Rate limiting ---
+slowapi==0.1.9
+
+# --- ASGI utilities ---
+python-multipart==0.0.19   # required for form data support (future endpoints)
+httpx==0.28.1              # async HTTP client (for future external integrations)
+
+# --- Dev / test (not installed in production) ---
+# pytest==8.3.4
+# pytest-asyncio==0.24.0
+# httpx==0.28.1             (already listed above, used for TestClient too)
