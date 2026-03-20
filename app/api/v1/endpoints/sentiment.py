@@ -1,10 +1,8 @@
 """POST /v1/sentiment endpoint."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -48,7 +46,8 @@ settings = get_settings()
 )
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def analyse_sentiment(
-    request: Annotated[SentimentRequest, Body()],
+    request: Request,
+    payload: Annotated[SentimentRequest, Body()],
 ) -> SentimentResponse:
-    result = sentiment_analyser.analyse(request.text)
+    result = sentiment_analyser.analyse(payload.text)
     return SentimentResponse(**result)

@@ -24,7 +24,7 @@ from data.sentiment_lexicon import (
     NEGATIVE_WORDS,
     POSITIVE_WORDS,
 )
-from app.services.preprocessor import preprocessor
+from app.services.preprocessor import ArabicPreprocessor, preprocessor
 
 
 # Maximum tokens we consider to limit CPU on very long texts
@@ -32,6 +32,20 @@ _MAX_TOKENS = 800
 
 # Negation scope: how many tokens after a negation word does it apply?
 _NEGATION_SCOPE = 3
+
+# ---- Normalise all lexicon keys once at import time ----
+# This ensures lookups work in the same orthographic space as the preprocessed tokens.
+_p = ArabicPreprocessor()
+
+
+def _norm(s: str) -> str:
+    return _p.normalize_letters(_p.remove_diacritics(s))
+
+
+_POSITIVE_NORM: dict[str, float] = {_norm(k): v for k, v in POSITIVE_WORDS.items()}
+_NEGATIVE_NORM: dict[str, float] = {_norm(k): v for k, v in NEGATIVE_WORDS.items()}
+_NEGATION_NORM: set[str] = {_norm(w) for w in NEGATION_WORDS}
+_INTENSIFIER_NORM: dict[str, float] = {_norm(k): v for k, v in INTENSIFIER_WORDS.items()}
 
 
 class SentimentAnalyser:
@@ -71,7 +85,7 @@ class SentimentAnalyser:
                 negation_counter = 0
 
             # Detect negation
-            if token in NEGATION_WORDS:
+            if token in _NEGATION_NORM:
                 negation_counter = _NEGATION_SCOPE + 1
 
             if negation_counter > 0:
@@ -83,20 +97,31 @@ class SentimentAnalyser:
             intensifier_mult = 1.0
             for j in range(max(0, i - 2), i):
                 back_tok = clean_tokens[j]
-                if back_tok in INTENSIFIER_WORDS:
-                    intensifier_mult = max(intensifier_mult, INTENSIFIER_WORDS[back_tok])
+                if back_tok in _INTENSIFIER_NORM:
+                    intensifier_mult = max(intensifier_mult, _INTENSIFIER_NORM[back_tok])
             # Also check multi-word intensifiers (2-gram)
             if i >= 1:
                 bigram = f"{clean_tokens[i-1]} {token}"
-                if bigram in INTENSIFIER_WORDS:
-                    intensifier_mult = max(intensifier_mult, INTENSIFIER_WORDS[bigram])
+                if bigram in _INTENSIFIER_NORM:
+                    intensifier_mult = max(intensifier_mult, _INTENSIFIER_NORM[bigram])
 
-            # Lexicon lookup
+            # Lexicon lookup (normalised keys).
+            # Also try stripping a trailing ه (normalised ة) to handle
+            # adjective surface forms like سيئه -> سيء, فظيعه -> فظيع.
             score: float | None = None
-            if token in POSITIVE_WORDS:
-                score = POSITIVE_WORDS[token]
-            elif token in NEGATIVE_WORDS:
-                score = NEGATIVE_WORDS[token]
+            candidates = [token]
+            if token.endswith("ه") and len(token) > 2:
+                candidates.append(token[:-1])   # strip trailing ه (was ة)
+            if token.endswith("ي") and len(token) > 2:
+                candidates.append(token[:-1])   # strip yeh suffix
+
+            for candidate in candidates:
+                if candidate in _POSITIVE_NORM:
+                    score = _POSITIVE_NORM[candidate]
+                    break
+                if candidate in _NEGATIVE_NORM:
+                    score = _NEGATIVE_NORM[candidate]
+                    break
 
             if score is not None:
                 effective_score = score * intensifier_mult
@@ -122,13 +147,22 @@ class SentimentAnalyser:
             confidence = 0.55
             label = "neutral"
         else:
-            # Sigmoid-like mapping of net score
-            norm_net = raw_net / (total_signal + 1e-9)   # in [-1, 1]
-            sigmoid = 1 / (1 + math.exp(-norm_net * 4))  # compress to (0,1)
+            # Normalise net score to [-1, 1] then apply sigmoid.
+            # Use a saturation factor so even a single strong hit yields a
+            # decisive label rather than getting averaged away by neutral mass.
+            norm_net = raw_net / (total_signal + 1e-9)      # in [-1, 1]
+            sigmoid = 1 / (1 + math.exp(-norm_net * 5))     # sharpened sigmoid
 
-            pos_prob = round(sigmoid * (total_signal / (total_signal + 1)) , 4)
-            neg_prob = round((1 - sigmoid) * (total_signal / (total_signal + 1)), 4)
-            neu_prob = round(max(0.0, 1 - pos_prob - neg_prob), 4)
+            # Coverage: how much of the sentence was covered by the lexicon.
+            # A single hit in a 20-word sentence should still classify, but
+            # with lower confidence than a densely opinionated sentence.
+            coverage = min(1.0, total_signal / 3.0)          # saturates at 3 signal units
+
+            # Distribute probability: polarity splits coverage, neutral gets the rest
+            polarity_mass = coverage                          # 0..1
+            pos_prob = round(sigmoid * polarity_mass, 4)
+            neg_prob = round((1 - sigmoid) * polarity_mass, 4)
+            neu_prob = round(max(0.0, 1.0 - pos_prob - neg_prob), 4)
 
             if pos_prob > neg_prob and pos_prob > neu_prob:
                 label = "positive"

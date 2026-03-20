@@ -90,12 +90,28 @@ class ArabicNER:
                 spans.append(Span(m.start(), m.end(), m.group(), "NUMBER", 0.92))
         return spans
 
+    # Arabic function words / prepositions that terminate a name span
+    _NAME_STOPWORDS = frozenset({
+        "في", "من", "إلى", "على", "عن", "مع", "بعد", "قبل", "حول",
+        "بين", "خلال", "ضد", "عند", "حتى", "منذ", "إن", "أن", "لأن",
+        "لكن", "أو", "و", "أم", "عن", "لـ", "بـ", "كـ", "وـ",
+        "الذي", "التي", "الذين", "اللاتي", "هذا", "هذه", "ذلك",
+        "يوم", "عام", "شهر", "أسبوع",
+    })
+
     def _find_persons(self, text: str) -> list[Span]:
         spans: list[Span] = []
 
-        # Pattern: TITLE + up to 4 Arabic words
+        # Build a stop-word alternation for negative lookahead inside the name
+        # Use a regex that grabs ONLY proper-looking name tokens (3+ chars, not stopwords)
+        # Pattern: TITLE + 1-3 name words (each word must NOT be a stopword)
+        _sw = "|".join(re.escape(w) for w in sorted(self._NAME_STOPWORDS, key=len, reverse=True))
+        # An "acceptable" name token: Arabic word that is NOT a stopword
+        _name_tok = r"(?!(?:" + _sw + r")(?:\s|$))[\u0600-\u06FF][\u0600-\u06FF\u0640]*"
+        _name_seq = r"(" + _name_tok + r"(?:\s+" + _name_tok + r"){0,2})"
+
         title_pattern = "(" + "|".join(re.escape(t) for t in sorted(PERSON_TITLES, key=len, reverse=True)) + ")"
-        title_re = re.compile(title_pattern + r"\s+([\u0600-\u06FF][\u0600-\u06FF\u0640]*(?:\s+[\u0600-\u06FF][\u0600-\u06FF\u0640]*){0,3})")
+        title_re = re.compile(title_pattern + r"\s+" + _name_seq)
 
         for m in title_re.finditer(text):
             spans.append(Span(m.start(), m.end(), m.group(), "PERSON", 0.88))

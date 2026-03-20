@@ -93,9 +93,13 @@ POSITIVE_WORDS: dict[str, float] = {
 }
 
 NEGATIVE_WORDS: dict[str, float] = {
-    # Strong negative
+    # Strong negative — includes inflected / teh-marbuta forms
     "سيء": -1.0,
+    "سيئ": -1.0,      # base without ة
+    "سيئة": -1.0,     # feminine / adjectival form
+    "سييه": -1.0,     # normalised surface form after ئ→ي, ة→ه
     "فظيع": -1.0,
+    "فظيعة": -1.0,
     "مريع": -1.0,
     "كارثة": -1.0,
     "رديء": -0.9,

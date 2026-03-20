@@ -22,7 +22,7 @@ _DIACRITICS_RE = re.compile(
 
 # Arabic punctuation + common punctuation retained in Arabic text
 _PUNCTUATION_RE = re.compile(
-    r"[،؛؟!\"""''()[\]{}\-–—_/\\|<>.,;:?!@#$%^&*+=~`]"
+    r'[،؛؟!\u0022\u0027\u201c\u201d\u2018\u2019()\[\]{}\-\u2013\u2014_/\\|<>.,;:?!@#$%^&*+=~`]'
 )
 
 # Arabic-Indic numerals (٠١٢٣٤٥٦٧٨٩) and Western numerals

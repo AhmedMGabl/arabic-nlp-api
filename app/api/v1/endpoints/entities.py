@@ -1,10 +1,8 @@
 """POST /v1/entities endpoint."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -44,7 +42,8 @@ settings = get_settings()
 )
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def extract_entities(
-    request: Annotated[NERRequest, Body()],
+    request: Request,
+    payload: Annotated[NERRequest, Body()],
 ) -> NERResponse:
-    result = ner_service.extract(request.text)
+    result = ner_service.extract(payload.text)
     return NERResponse(**result)

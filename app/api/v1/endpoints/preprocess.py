@@ -1,10 +1,9 @@
 """POST /v1/preprocess endpoint."""
 
-from __future__ import annotations
-
+import time
 from typing import Annotated
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -45,14 +44,21 @@ settings = get_settings()
 )
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def preprocess_text(
-    request: Annotated[PreprocessRequest, Body()],
+    request: Request,
+    payload: Annotated[PreprocessRequest, Body()],
 ) -> PreprocessResponse:
+    t0 = time.perf_counter()
     result = preprocessor.process(
-        request.text,
-        normalize=request.normalize,
-        remove_diacritics=request.remove_diacritics,
-        remove_punctuation=request.remove_punctuation,
-        remove_numbers=request.remove_numbers,
-        tokenize=request.tokenize,
+        payload.text,
+        normalize=payload.normalize,
+        remove_diacritics=payload.remove_diacritics,
+        remove_punctuation=payload.remove_punctuation,
+        remove_numbers=payload.remove_numbers,
+        tokenize=payload.tokenize,
     )
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+    result["meta"] = {
+        "char_count": len(payload.text),
+        "processing_time_ms": elapsed_ms,
+    }
     return PreprocessResponse(**result)

@@ -1,10 +1,8 @@
 """POST /v1/detect-dialect endpoint."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -49,7 +47,8 @@ settings = get_settings()
 )
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def detect_dialect(
-    request: Annotated[DialectRequest, Body()],
+    request: Request,
+    payload: Annotated[DialectRequest, Body()],
 ) -> DialectResponse:
-    result = dialect_detector.detect(request.text)
+    result = dialect_detector.detect(payload.text)
     return DialectResponse(**result)
